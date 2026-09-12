@@ -1,5 +1,4 @@
 from http import HTTPStatus
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -8,7 +7,6 @@ from fastapi import HTTPException
 from jwt import decode
 
 from app.core.security import create_access_token, get_current_user
-from app.core.security.security import get_current_trainer
 from app.core.settings import Settings
 
 
@@ -56,30 +54,3 @@ async def test_get_current_user_does_not_exists():
 
     assert exc_info.value.status_code == HTTPStatus.UNAUTHORIZED
     assert exc_info.value.detail == "Could not validate credentials"
-
-
-@pytest.mark.asyncio
-async def test_get_current_trainer_returns_trainer():
-    user_id = uuid4()
-    token = create_access_token({"sub": str(user_id)})
-    session = AsyncMock()
-    trainer = object()
-    session.scalar = AsyncMock(side_effect=[SimpleNamespace(id=user_id), trainer])
-
-    result = await get_current_trainer(session=session, token=token)
-
-    assert result is trainer
-
-
-@pytest.mark.asyncio
-async def test_get_current_trainer_raises_not_found_when_missing():
-    user_id = uuid4()
-    token = create_access_token({"sub": str(user_id)})
-    session = AsyncMock()
-    session.scalar = AsyncMock(side_effect=[SimpleNamespace(id=user_id), None])
-
-    with pytest.raises(HTTPException) as exc_info:
-        await get_current_trainer(session=session, token=token)
-
-    assert exc_info.value.status_code == HTTPStatus.NOT_FOUND
-    assert exc_info.value.detail == "Trainer not found"

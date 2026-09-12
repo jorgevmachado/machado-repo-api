@@ -8,9 +8,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.logging import log_service_exception
 
 STATUS_MESSAGE_MAP: dict[HTTPStatus, str] = {
-    HTTPStatus.UNAUTHORIZED: 'Incorrect email or password',
-    HTTPStatus.INTERNAL_SERVER_ERROR: 'Internal server error',
-    HTTPStatus.SERVICE_UNAVAILABLE: 'Failed to execute external request',
+    HTTPStatus.UNAUTHORIZED: "Incorrect email or password",
+    HTTPStatus.INTERNAL_SERVER_ERROR: "Internal server error",
+    HTTPStatus.SERVICE_UNAVAILABLE: "Failed to execute external request",
 }
 
 

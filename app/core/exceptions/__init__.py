@@ -4,4 +4,4 @@ from app.core.exceptions.exceptions import (
     handle_service_exception,
 )
 
-__all__ = ['handle_service_exception', 'AppHTTPException', 'UnauthorizedException']
+__all__ = ["handle_service_exception", "AppHTTPException", "UnauthorizedException"]

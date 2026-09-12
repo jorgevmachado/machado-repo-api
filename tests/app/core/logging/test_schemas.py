@@ -11,11 +11,11 @@ class TestLoggingParams:
     def test_accepts_valid_logger():
         """Should create LoggingParams when logger implements info() and exception()"""
         logger = MagicMock()
-        params = LoggingParams(logger=logger, service='auth', operation='authenticate')
+        params = LoggingParams(logger=logger, service="auth", operation="authenticate")
 
         assert params.logger is logger
-        assert params.service == 'auth'
-        assert params.operation == 'authenticate'
+        assert params.service == "auth"
+        assert params.operation == "authenticate"
 
     @staticmethod
     def test_accepts_logger_with_duck_typed_methods():
@@ -30,8 +30,8 @@ class TestLoggingParams:
 
         params = LoggingParams(
             logger=CustomLogger(),
-            service='auth',
-            operation='authenticate',
+            service="auth",
+            operation="authenticate",
         )
 
         assert params.logger is not None
@@ -45,12 +45,12 @@ class TestLoggingParams:
                 pass  # comment explaining why the method is empty
 
         with pytest.raises(
-            ValueError, match='logger must implement info\\(\\) and exception\\(\\)'
+            ValueError, match="logger must implement info\\(\\) and exception\\(\\)"
         ):
             LoggingParams(
                 logger=InvalidLogger(),
-                service='auth',
-                operation='authenticate',
+                service="auth",
+                operation="authenticate",
             )
 
     @staticmethod
@@ -62,31 +62,31 @@ class TestLoggingParams:
                 pass  # comment explaining why the method is empty
 
         with pytest.raises(
-            ValueError, match='logger must implement info\\(\\) and exception\\(\\)'
+            ValueError, match="logger must implement info\\(\\) and exception\\(\\)"
         ):
             LoggingParams(
                 logger=InvalidLogger(),
-                service='auth',
-                operation='authenticate',
+                service="auth",
+                operation="authenticate",
             )
 
     @staticmethod
     def test_raises_when_logger_is_plain_object():
         """Should raise ValueError when logger is an object without required methods"""
         with pytest.raises(
-            ValueError, match='logger must implement info\\(\\) and exception\\(\\)'
+            ValueError, match="logger must implement info\\(\\) and exception\\(\\)"
         ):
             LoggingParams(
                 logger=object(),
-                service='auth',
-                operation='authenticate',
+                service="auth",
+                operation="authenticate",
             )
 
     @staticmethod
     def test_optional_fields_default_to_none():
         """Should set message and status_code to None by default"""
         logger = MagicMock()
-        params = LoggingParams(logger=logger, service='auth', operation='authenticate')
+        params = LoggingParams(logger=logger, service="auth", operation="authenticate")
 
         assert params.message is None
         assert params.status_code is None
@@ -97,11 +97,11 @@ class TestLoggingParams:
         logger = MagicMock()
         params = LoggingParams(
             logger=logger,
-            service='auth',
-            operation='authenticate',
-            message='User authenticated',
+            service="auth",
+            operation="authenticate",
+            message="User authenticated",
             status_code=HTTPStatus.OK,
         )
 
-        assert params.message == 'User authenticated'
+        assert params.message == "User authenticated"
         assert params.status_code == HTTPStatus.OK

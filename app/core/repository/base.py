@@ -265,9 +265,24 @@ class BaseRepository[ModelT]:
         await self.session.refresh(entity)
         return entity
 
+    def _resolve_relation_name(self, raw_filters: dict[str, Any]) -> str | None:
+        if not raw_filters:
+            return None
+
+        mapper = getattr(self.model, "__mapper__", None)
+        if mapper is None:
+            return None
+
+        for relation_name in mapper.relationships.keys():
+            prefix = f"{relation_name}_"
+            if any(key.startswith(prefix) for key in raw_filters):
+                return relation_name
+
+        return None
+
     async def list_all(self, page_filter: Annotated[FilterPage, Query()] = None):
         query = select(self.model)
-        relation = "pokemon"
+        relation: str | None = None
         relations_filters: dict[str, Any] = {}
 
         for option in self.relations:
@@ -275,9 +290,16 @@ class BaseRepository[ModelT]:
 
         if page_filter is not None:
             raw_filters = self._prepare_raw_filters(page_filter)
-            relations_filters = self._extract_relations_filters(raw_filters, relation)
+            relation = self._resolve_relation_name(raw_filters)
+            if relation is not None:
+                relations_filters = self._extract_relations_filters(
+                    raw_filters, relation
+                )
             query = self._apply_main_filters(query, raw_filters)
-            query = self._apply_relations_filters(query, relations_filters, relation)
+            if relation is not None:
+                query = self._apply_relations_filters(
+                    query, relations_filters, relation
+                )
 
         query = self._apply_order_by(query, page_filter)
 
@@ -348,14 +370,25 @@ class BaseRepository[ModelT]:
         query = select(self.model)
 
         has_special_filter = False
-        pokemon_name = kwargs.pop("pokemon_name", None)
-        if (
-            pokemon_name is not None
-            and hasattr(self.model, "pokemon_id")
-            and hasattr(self.model, "pokemon")
-        ):
-            query = query.where(self.model.pokemon.has(name=pokemon_name))
-            has_special_filter = True
+        for relation_name in self.model.__mapper__.relationships.keys():
+            for key in list(kwargs.keys()):
+                if not key.startswith(f"{relation_name}_"):
+                    continue
+
+                field = key.removeprefix(f"{relation_name}_").strip()
+                if not field:
+                    continue
+
+                value = kwargs.pop(key, None)
+                if value is None:
+                    continue
+
+                predicate = self._build_relation_predicate(
+                    self.model, [relation_name, field], value
+                )
+                if predicate is not None:
+                    query = query.where(predicate)
+                    has_special_filter = True
 
         valid_columns = set(self.model.__mapper__.columns.keys())
         original_kwargs = kwargs.copy()

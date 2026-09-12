@@ -14,9 +14,9 @@ class LoggingParams(BaseModel):
     status_code: Optional[HTTPStatus] = None
     user_request: Optional[str] = None
 
-    @field_validator('logger')
+    @field_validator("logger")
     @classmethod
     def validate_logger(cls, value: Any) -> Any:
-        if not (hasattr(value, 'info') and hasattr(value, 'exception')):
-            raise ValueError('logger must implement info() and exception()')
+        if not (hasattr(value, "info") and hasattr(value, "exception")):
+            raise ValueError("logger must implement info() and exception()")
         return value

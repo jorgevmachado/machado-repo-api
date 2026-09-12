@@ -1,58 +1,67 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum as SAEnum, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, Enum as SAEnum, String, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database.base import table_registry
-from app.models.enums import GenderEnum, StatusEnum, RoleEnum
+from app.core.database.base import default_lazy, table_registry
+from app.models.enums import StatusEnum
+from app.models import utcnow
 
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+if TYPE_CHECKING:
+    from app.models.role import Role
+    from app.models.password import Password
+    from app.models.authentication import Authentication
 
 
 @table_registry.mapped_as_dataclass
 class User:
-    __tablename__ = 'users'
+    __tablename__ = "users"
+
+    role_id: Mapped[UUID] = mapped_column(ForeignKey("roles.id"), nullable=False)
+
+    role: Mapped["Role"] = relationship(
+        init=False,
+        lazy=default_lazy,
+        back_populates="users",
+    )
+
+    authentication: Mapped["Authentication"] = relationship(
+        init=False,
+        lazy=default_lazy,
+        back_populates="user",
+    )
+
+    password: Mapped["Password"] = relationship(
+        init=False,
+        lazy=default_lazy,
+        back_populates="user",
+    )
 
     # Required fields (no defaults) — must come first in __init__
     name: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    gender: Mapped[GenderEnum] = mapped_column(
-        SAEnum(GenderEnum, name='genderenum'), nullable=False
+    date_of_birth: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
     )
-    password: Mapped[str] = mapped_column(String, nullable=False)
-    date_of_birth: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Optional fields with defaults
     status: Mapped[StatusEnum] = mapped_column(
-        SAEnum(StatusEnum, name='statusenum'),
+        SAEnum(StatusEnum, name="statusenum"),
         nullable=False,
         default=StatusEnum.INACTIVE,
     )
-    role: Mapped[RoleEnum] = mapped_column(
-        SAEnum(RoleEnum, name='roleenum'),
-        nullable=False,
-        default=RoleEnum.USER,
-    )
-
-    total_authentications: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
-    authentication_success: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
-    authentication_failures: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
-    last_authentication_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, default=None
-    )
-    
 
     # Auto-generated / server-managed — excluded from __init__
-    id: Mapped[UUID] = mapped_column(primary_key=True, default_factory=uuid4, init=False)
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default_factory=uuid4, init=False
+    )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default_factory=_utcnow, init=False
+        DateTime(timezone=True), nullable=False, default_factory=utcnow, init=False
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None, init=False

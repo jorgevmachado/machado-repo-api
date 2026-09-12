@@ -15,13 +15,6 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_session
 from app.core.settings import Settings
-from app.models import (
-    Pokedex,
-    PokedexEntry,
-    Pokemon,
-    Trainer,
-    Type,
-)
 from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", refreshUrl="auth/refresh")
@@ -59,6 +52,7 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     try:
         payload = decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         subject: str | None = payload.get("sub")
@@ -71,66 +65,11 @@ async def get_current_user(
     except (DecodeError, ExpiredSignatureError, ValueError):
         raise credentials_exception
 
-    trainer_relations = selectinload(User.trainer)
-    pokedex_pokemon_relations = (
-        trainer_relations.selectinload(Trainer.pokedex)
-        .selectinload(Pokedex.entries)
-        .selectinload(PokedexEntry.pokemon)
+    user = await session.scalar(
+        select(User).options(selectinload(User.role)).where(User.id == user_id)
     )
-
-    query = (
-        select(User)
-        .options(
-            trainer_relations.selectinload(Trainer.user),
-            trainer_relations.selectinload(Trainer.pokedex),
-            pokedex_pokemon_relations.selectinload(Pokemon.images),
-            pokedex_pokemon_relations.selectinload(Pokemon.habitat),
-            pokedex_pokemon_relations.selectinload(Pokemon.shape),
-            pokedex_pokemon_relations.selectinload(Pokemon.growth_rate),
-            pokedex_pokemon_relations.selectinload(Pokemon.types).selectinload(
-                Type.strengths
-            ),
-            pokedex_pokemon_relations.selectinload(Pokemon.types).selectinload(
-                Type.weaknesses
-            ),
-            pokedex_pokemon_relations.selectinload(Pokemon.moves),
-            pokedex_pokemon_relations.selectinload(Pokemon.abilities),
-            pokedex_pokemon_relations.selectinload(Pokemon.encounters),
-            pokedex_pokemon_relations.selectinload(Pokemon.evolutions).selectinload(
-                Pokemon.images
-            ),
-            pokedex_pokemon_relations.selectinload(Pokemon.evolutions).selectinload(
-                Pokemon.habitat
-            ),
-            pokedex_pokemon_relations.selectinload(Pokemon.evolutions).selectinload(
-                Pokemon.shape
-            ),
-            pokedex_pokemon_relations.selectinload(Pokemon.evolutions).selectinload(
-                Pokemon.growth_rate
-            ),
-        )
-        .where(User.id == user_id)
-    )
-    user = await session.scalar(query)
 
     if not user:
         raise credentials_exception
 
     return user
-
-
-async def get_current_trainer(
-    session: AsyncSession = Depends(get_session),
-    token: str = Depends(oauth2_scheme),
-) -> Trainer:
-    user = await get_current_user(session, token)
-
-    trainer = await session.scalar(select(Trainer).where(Trainer.user_id == user.id))
-
-    if not trainer:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail="Trainer not found",
-        )
-
-    return trainer

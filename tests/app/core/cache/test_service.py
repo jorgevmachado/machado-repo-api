@@ -468,3 +468,27 @@ class TestCacheServiceRawCache:
 
         assert result is None
         cache_service.cache.set_cache.assert_awaited_once_with(key, payload, 30)
+
+
+class TestCacheServiceDeleteWithParent:
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_cache_service_delete_with_parent_list_none(cache_service):
+        cache_service.cache.delete_pattern = AsyncMock(return_value=None)
+
+        result = await cache_service.delete_with_parent_cache(parents=None)
+
+        assert result is None
+        cache_service.cache.delete_pattern.assert_awaited_once_with("test_cache*")
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_cache_service_delete_with_parent_list(cache_service):
+        cache_service.cache.delete_pattern = AsyncMock(return_value=None)
+
+        result = await cache_service.delete_with_parent_cache(
+            parents=["parent1", "parent2"]
+        )
+
+        assert result is None
+        assert cache_service.cache.delete_pattern.call_count == 3

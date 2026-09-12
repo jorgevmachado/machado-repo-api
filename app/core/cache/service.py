@@ -232,6 +232,23 @@ class CacheService:
         )
         return None
 
+    async def delete_with_parent_cache(self, parents: list[str] | None = None) -> None:
+        await self.delete_domain()
+        if not parents:
+            return None
+        deleted_count = 0
+        for parent in parents:
+            pattern = f"{parent}*"
+            await self.cache.delete_pattern(pattern)
+            deleted_count += 1
+
+        log_service_success(
+            self.logger_params,
+            operation="cache_delete_parent_cache",
+            message=f"In total, the caches of {deleted_count} parents were deleted.",
+        )
+        return None
+
     async def delete_cache(
         self,
         prefix: str | None = None,

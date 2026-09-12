@@ -19,7 +19,7 @@ class TestUnauthorizedException:
         exception = UnauthorizedException()
 
         assert exception.status_code == HTTPStatus.UNAUTHORIZED
-        assert exception.detail == 'Incorrect email or password'
+        assert exception.detail == "Incorrect email or password"
 
 
 class TestHandleServiceException:
@@ -30,44 +30,44 @@ class TestHandleServiceException:
         and log error string
         """
         logger = MagicMock()
-        error = HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail='Bad request')
+        error = HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Bad request")
 
         result = handle_service_exception(
             error,
             logger=logger,
-            service='auth',
-            operation='authenticate',
+            service="auth",
+            operation="authenticate",
             raise_exception=False,
-            user_request='ash',
+            user_request="ash",
         )
 
-        assert result == (HTTPStatus.BAD_REQUEST, 'Bad request')
+        assert result == (HTTPStatus.BAD_REQUEST, "Bad request")
         logger.log.assert_called_once()
         _, log_kwargs = logger.log.call_args
-        assert log_kwargs['extra']['error'] == str(error)
-        assert log_kwargs['extra']['user_request'] == 'ash'
+        assert log_kwargs["extra"]["error"] == str(error)
+        assert log_kwargs["extra"]["user_request"] == "ash"
 
     @staticmethod
     def test_handle_service_exception_with_http_exception():
         """Should preserve status code and detail from HTTPException and log error string"""
         logger = MagicMock()
-        error = HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail='Bad request')
+        error = HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Bad request")
 
         with pytest.raises(AppHTTPException) as exc_info:
             handle_service_exception(
                 error,
                 logger=logger,
-                service='auth',
-                operation='authenticate',
+                service="auth",
+                operation="authenticate",
             )
 
         assert exc_info.value.status_code == HTTPStatus.BAD_REQUEST
-        assert exc_info.value.detail == 'Bad request'
+        assert exc_info.value.detail == "Bad request"
         logger.log.assert_called_once()
         _, log_kwargs = logger.log.call_args
-        assert log_kwargs['extra']['status_code'] == HTTPStatus.BAD_REQUEST
-        assert log_kwargs['extra']['error'] == str(error)
-        assert not log_kwargs['extra']['user_request']
+        assert log_kwargs["extra"]["status_code"] == HTTPStatus.BAD_REQUEST
+        assert log_kwargs["extra"]["error"] == str(error)
+        assert not log_kwargs["extra"]["user_request"]
 
     @staticmethod
     def test_handle_service_exception_with_invalid_http_status():
@@ -76,22 +76,22 @@ class TestHandleServiceException:
         and log error string
         """
         logger = MagicMock()
-        error = HTTPException(status_code=999, detail='Invalid')
+        error = HTTPException(status_code=999, detail="Invalid")
 
         with pytest.raises(AppHTTPException) as exc_info:
             handle_service_exception(
                 error,
                 logger=logger,
-                service='auth',
-                operation='authenticate',
+                service="auth",
+                operation="authenticate",
             )
 
         _, log_kwargs = logger.log.call_args
-        result_status_code = log_kwargs['extra']['status_code']
+        result_status_code = log_kwargs["extra"]["status_code"]
         assert exc_info.value.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        assert exc_info.value.detail == 'Invalid'
+        assert exc_info.value.detail == "Invalid"
         assert result_status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        assert log_kwargs['extra']['error'] == str(error)
+        assert log_kwargs["extra"]["error"] == str(error)
         logger.log.assert_called_once()
 
     @staticmethod
@@ -101,21 +101,21 @@ class TestHandleServiceException:
         and log error string
         """
         logger = MagicMock()
-        error = SQLAlchemyError('boom')
+        error = SQLAlchemyError("boom")
 
         with pytest.raises(AppHTTPException) as exc_info:
             handle_service_exception(
                 error,
                 logger=logger,
-                service='auth',
-                operation='authenticate',
+                service="auth",
+                operation="authenticate",
             )
 
         assert exc_info.value.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        assert exc_info.value.detail == 'Internal server error'
+        assert exc_info.value.detail == "Internal server error"
         logger.log.assert_called_once()
         _, log_kwargs = logger.log.call_args
-        assert log_kwargs['extra']['error'] == str(error)
+        assert log_kwargs["extra"]["error"] == str(error)
 
     @staticmethod
     def test_handle_service_exception_with_unexpected_error():
@@ -124,18 +124,18 @@ class TestHandleServiceException:
         and log error string
         """
         logger = MagicMock()
-        error = Exception('boom')
+        error = Exception("boom")
 
         with pytest.raises(AppHTTPException) as exc_info:
             handle_service_exception(
                 error,
                 logger=logger,
-                service='auth',
-                operation='authenticate',
+                service="auth",
+                operation="authenticate",
             )
 
         assert exc_info.value.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        assert exc_info.value.detail == 'Internal server error'
+        assert exc_info.value.detail == "Internal server error"
         logger.log.assert_called_once()
         _, log_kwargs = logger.log.call_args
-        assert log_kwargs['extra']['error'] == str(error)
+        assert log_kwargs["extra"]["error"] == str(error)

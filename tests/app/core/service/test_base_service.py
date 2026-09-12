@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.core.logging import LoggingParams
 from app.core.service.base import BaseService
+from app.models import utcnow
 from app.shared.schemas import FilterPage
 
 
@@ -15,6 +16,13 @@ class BaseModelSchema(BaseModel):
     id: str
     name: str
     value: int
+
+
+class SourceBaseModelSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    source: str
+    source_code: str
 
 
 @pytest.fixture
@@ -82,6 +90,18 @@ class TestBaseServiceListAll:
             mock_log_success.assert_called_once()
 
 
+class TestFilterPageHelpers:
+    @staticmethod
+    def test_filter_page_with_updates_supports_dynamic_fields():
+        page_filter = FilterPage(page=1)
+
+        updated = page_filter.with_updates(clean_cache=True)
+
+        assert updated.page == 1
+        assert updated.clean_cache is True
+        assert updated.model_dump(exclude_none=True)["clean_cache"] is True
+
+
 class TestBaseServiceListAllCached:
     @staticmethod
     @pytest.mark.asyncio
@@ -142,7 +162,9 @@ class TestBaseServiceFindOne:
         result = await base_service.find_one(param=MOCK_RESULT["name"])
         assert result["id"] == MOCK_RESULT["id"]
         assert result["name"] == MOCK_RESULT["name"]
-        mock_repository.find_by.assert_awaited_once_with(name=MOCK_RESULT["name"])
+        mock_repository.find_by.assert_awaited_once_with(
+            name=MOCK_RESULT["name"], with_deleted=False
+        )
 
     @staticmethod
     @pytest.mark.asyncio
@@ -151,7 +173,22 @@ class TestBaseServiceFindOne:
         result = await base_service.find_one(param=MOCK_RESULT["id"])
         assert result["id"] == MOCK_RESULT["id"]
         assert result["name"] == MOCK_RESULT["name"]
-        mock_repository.find_by.assert_awaited_once_with(id=MOCK_RESULT["id"])
+        mock_repository.find_by.assert_awaited_once_with(
+            id=MOCK_RESULT["id"], with_deleted=False
+        )
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_find_one_by_id_with_reference_year(base_service, mock_repository):
+        mock_repository.find_by.return_value = MOCK_RESULT
+        result = await base_service.find_one(
+            param=MOCK_RESULT["id"], with_deleted=False, reference_year=2023
+        )
+        assert result["id"] == MOCK_RESULT["id"]
+        assert result["name"] == MOCK_RESULT["name"]
+        mock_repository.find_by.assert_awaited_once_with(
+            id=MOCK_RESULT["id"], with_deleted=False, reference_year=2023
+        )
 
     @staticmethod
     @pytest.mark.asyncio
@@ -233,6 +270,27 @@ class TestBaseServiceFindOneCached:
             cache_key
         )
 
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_base_service_find_one_cached_success_with_reference_year(
+        base_service, mock_repository
+    ):
+        """Should return complete pokemon when found"""
+        reference_year = utcnow().year
+        item = BaseModelSchema(id="1", name="item1", value=1)
+        mock_repository.find_by.return_value = item
+        base_service.cache_service.build_key_one = AsyncMock(
+            return_value=f"test_service:{item.name}:{reference_year}"
+        )
+        base_service.cache_service.get_one = AsyncMock(return_value=item)
+        result = await base_service.find_one_cached(
+            param=item.name, user_request="user1", reference_year=reference_year
+        )
+        assert result is not None
+        assert result.id == item.id
+        assert result.name == item.name
+        assert result.value == item.value
+
 
 class TestBaseServiceFindBy:
     @staticmethod
@@ -262,6 +320,14 @@ class MockUpdateSchema:
         return self._data
 
 
+class MockNameUpdateSchema(MockUpdateSchema):
+    model_fields = {"name": object(), "name_code": object()}
+
+
+class MockSourceUpdateSchema(MockUpdateSchema):
+    model_fields = {"source": object(), "source_code": object()}
+
+
 class TestBaseServiceUpdate:
     @staticmethod
     @pytest.mark.asyncio
@@ -271,6 +337,7 @@ class TestBaseServiceUpdate:
         mock_repository.update = AsyncMock(
             return_value={**entity, "name": "new_name", "value": 2}
         )
+        base_service._invalidate_cache = AsyncMock(return_value=None)
         update_data = {"name": "new_name", "value": 2}
         update_schema = MockUpdateSchema(update_data)
         with patch("app.core.service.base.log_service_success"):
@@ -285,6 +352,7 @@ class TestBaseServiceUpdate:
         entity = BaseModelSchema(id="1", name="old", value=1)
         mock_repository.find_by.return_value = entity
         mock_repository.update = AsyncMock(return_value=entity)
+        base_service._invalidate_cache = AsyncMock(return_value=None)
 
         update_schema = MockUpdateSchema({"name": "new", "value": 2})
         result = await base_service.update("old", update_schema)
@@ -300,6 +368,7 @@ class TestBaseServiceUpdate:
         mock_repository.update = AsyncMock(
             return_value={**entity, "name": "partial_update"}
         )
+        base_service._invalidate_cache = AsyncMock(return_value=None)
         update_data = {"name": "partial_update"}
         update_schema = MockUpdateSchema(update_data)
         with patch("app.core.service.base.log_service_success") as mock_log_success:
@@ -313,6 +382,77 @@ class TestBaseServiceUpdate:
                 message=f"Update {base_service.alias} successfully",
                 user_request=None,
             )
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_update_syncs_name_code_when_name_changes(
+        base_service, mock_repository
+    ):
+        entity = {
+            "id": "123",
+            "name": "old name",
+            "name_code": "old_name",
+            "value": 1,
+        }
+        mock_repository.find_by.return_value = entity
+        mock_repository.update = AsyncMock(return_value=entity)
+        base_service._invalidate_cache = AsyncMock(return_value=None)
+
+        update_schema = MockNameUpdateSchema({"name": "New Name", "value": 2})
+
+        with patch("app.core.service.base.log_service_success"):
+            await base_service.update(param="123", update_schema=update_schema)
+
+        updated_entity = mock_repository.update.await_args.args[0]
+        assert updated_entity["name"] == "New Name"
+        assert updated_entity["name_code"] == "new_name"
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_update_syncs_source_code_when_source_changes(
+        base_service, mock_repository
+    ):
+        entity = SourceBaseModelSchema(
+            id="1",
+            source="Old Source",
+            source_code="old_source",
+        )
+        mock_repository.find_by.return_value = entity
+        mock_repository.update = AsyncMock(return_value=entity)
+        base_service._invalidate_cache = AsyncMock(return_value=None)
+
+        update_schema = MockSourceUpdateSchema({"source": "New Source"})
+
+        with patch("app.core.service.base.log_service_success"):
+            await base_service.update(param="1", update_schema=update_schema)
+
+        updated_entity = mock_repository.update.await_args.args[0]
+        assert updated_entity.source == "New Source"
+        assert updated_entity.source_code == "new_source"
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_update_skips_name_code_when_name_is_not_string(
+        base_service, mock_repository
+    ):
+        entity = {
+            "id": "123",
+            "name": "old name",
+            "name_code": "old_name",
+            "value": 1,
+        }
+        mock_repository.find_by.return_value = entity
+        mock_repository.update = AsyncMock(return_value=entity)
+        base_service._invalidate_cache = AsyncMock(return_value=None)
+
+        update_schema = MockNameUpdateSchema({"name": 123})
+
+        with patch("app.core.service.base.log_service_success"):
+            await base_service.update(param="123", update_schema=update_schema)
+
+        updated_entity = mock_repository.update.await_args.args[0]
+        assert updated_entity["name"] == 123
+        assert updated_entity["name_code"] == "old_name"
 
     @staticmethod
     @pytest.mark.asyncio
@@ -330,6 +470,7 @@ class TestBaseServiceUpdate:
         entity = {"id": "123", "name": "old_name"}
         mock_repository.find_by.return_value = entity
         mock_repository.update = AsyncMock(side_effect=Exception("DB error"))
+        base_service._invalidate_cache = AsyncMock(return_value=None)
         update_schema = MockUpdateSchema({"name": "fail_update"})
         with (
             patch("app.core.service.base.handle_service_exception") as mock_handle_exc,
@@ -382,7 +523,7 @@ class TestBaseServiceListAllCachedNoPageFilter:
         base_service.list_all = AsyncMock(return_value=values)
 
         result = await base_service.list_all_cached(
-            page_filter=None, user_request="user4", trainer_id="trainer123"
+            page_filter=None, user_request="user4", finance_id="trainer123"
         )
         assert isinstance(result, list)
         assert len(result) == 1
@@ -396,7 +537,7 @@ class TestBaseServiceInvalidateCache:
         base_service.cache_service.cache.delete_cache = AsyncMock()
 
         await base_service._invalidate_cache(
-            identifier="item1", trainer_id="trainer123"
+            identifier="item1", finance_id="trainer123"
         )
 
         base_service.cache_service.delete_domain.assert_awaited_once()
@@ -438,7 +579,9 @@ class TestBaseServiceFindOneByName:
                 param="test_name", user_request="user1"
             )
             assert result == entity
-            mock_repository.find_by.assert_awaited_once_with(name="test_name")
+            mock_repository.find_by.assert_awaited_once_with(
+                name="test_name", with_deleted=None
+            )
             mock_log_success.assert_called_once()
 
     @staticmethod
@@ -448,11 +591,11 @@ class TestBaseServiceFindOneByName:
         mock_repository.find_by.return_value = entity
         with patch("app.core.service.base.log_service_success") as mock_log_success:
             result = await base_service.find_one(
-                param="test_name", user_request="user2", trainer_id="trainer123"
+                param="test_name", user_request="user2", finance_id="trainer123"
             )
             assert result == entity
             mock_repository.find_by.assert_awaited_once_with(
-                name="test_name", trainer_id="trainer123"
+                name="test_name", finance_id="trainer123", with_deleted=None
             )
             mock_log_success.assert_called_once()
 
@@ -470,7 +613,7 @@ class TestBaseServiceFindOneCache:
         base_service.find_one = AsyncMock(return_value=entity)
 
         result = await base_service.find_one_cached(
-            param="item", user_request="user1", trainer_id="trainer123"
+            param="item", user_request="user1", finance_id="trainer123"
         )
         assert result == entity
         base_service.cache_service.set_one.assert_awaited_once()
@@ -502,5 +645,47 @@ class TestBaseServiceUpdateEntity:
         ):
             await base_service.update_entity(entity=entity, user_request="ash")
 
+        mock_handle_exc.assert_called_once()
+        mock_log_success.assert_called_once()
+
+
+class TestBaseServiceSoftDelete:
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_soft_delete_success(base_service, mock_repository):
+        entity = MagicMock()
+        entity.deleted_at = None
+        base_service.find_one = AsyncMock(return_value=entity)
+        base_service._invalidate_cache = AsyncMock(return_value=None)
+        mock_repository.update = AsyncMock(return_value=entity)
+
+        result = await base_service.soft_delete(
+            param="item", user_request="user1", finance_id="finance-1"
+        )
+
+        assert result.message == "Deleted test_service successfully"
+        base_service.find_one.assert_awaited_once_with(
+            param="item", finance_id="finance-1", user_request="user1"
+        )
+        base_service._invalidate_cache.assert_awaited_once_with(
+            identifier="item", finance_id="finance-1"
+        )
+        mock_repository.update.assert_awaited_once_with(entity)
+        assert entity.deleted_at is not None
+
+    @staticmethod
+    @pytest.mark.asyncio
+    async def test_soft_delete_handles_not_found(base_service):
+        base_service.find_one = AsyncMock(return_value=None)
+
+        with (
+            patch("app.core.service.base.handle_service_exception") as mock_handle_exc,
+            patch("app.core.service.base.log_service_success") as mock_log_success,
+        ):
+            result = await base_service.soft_delete(
+                param="missing", user_request="user2", finance_id="finance-1"
+            )
+
+        assert result is None
         mock_handle_exc.assert_called_once()
         mock_log_success.assert_called_once()

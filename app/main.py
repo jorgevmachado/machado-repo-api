@@ -15,8 +15,9 @@ app = FastAPI()
 
 add_pagination(app)
 
-app.include_router(auth_router, prefix='/auth', tags=['Auth'])
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
-@app.get('/', status_code=HTTPStatus.OK, response_model=Message)
+
+@app.get("/", status_code=HTTPStatus.OK, response_model=Message)
 def read_root():
-    return {'message': 'Hello World!'}
+    return {"message": "Hello World!"}
