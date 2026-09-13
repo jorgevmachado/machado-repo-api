@@ -35,6 +35,7 @@ class AuthInfoSchema(BaseModel):
     total: int
     total_success: int
     total_failures: int
+    failed_attempts: int
     last_authentication_at: datetime | None = None
 
 

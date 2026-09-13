@@ -54,6 +54,7 @@ async def me(current_user: Annotated[User, Depends(get_current_user)]):
             total=current_user.authentication.total,
             total_success=current_user.authentication.total_success,
             total_failures=current_user.authentication.total_failures,
+            failed_attempts=current_user.authentication.failed_attempts,
             last_authentication_at=current_user.authentication.last_authentication_at,
         ),
         username=current_user.username,

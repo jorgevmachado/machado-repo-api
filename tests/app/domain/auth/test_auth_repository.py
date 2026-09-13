@@ -169,6 +169,7 @@ class TestAuthRepository:
             total=0,
             total_success=0,
             total_failures=0,
+            failed_attempts=0,
             last_authentication_at=None,
         )
         repository.initialize_authentication = AsyncMock(return_value=authentication)
@@ -178,6 +179,7 @@ class TestAuthRepository:
         assert result.total == 1
         assert result.total_success == 1
         assert result.total_failures == 0
+        assert result.failed_attempts == 0
         repository.initialize_authentication.assert_awaited_once()
 
     @staticmethod
@@ -189,6 +191,7 @@ class TestAuthRepository:
             total=2,
             total_success=1,
             total_failures=2,
+            failed_attempts=2,
             last_authentication_at=None,
         )
         session.scalar.return_value = authentication

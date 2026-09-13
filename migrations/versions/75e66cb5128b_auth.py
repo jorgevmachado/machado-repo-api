@@ -73,6 +73,7 @@ def upgrade() -> None:
         sa.Column("total", sa.Integer(), nullable=True),
         sa.Column("total_success", sa.Integer(), nullable=True),
         sa.Column("total_failures", sa.Integer(), nullable=True),
+        sa.Column("failed_attempts", sa.Integer(), nullable=True),
         sa.Column("last_authentication_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

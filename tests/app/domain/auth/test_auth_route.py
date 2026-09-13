@@ -73,6 +73,7 @@ class TestAuthRoutes:
                 total=2,
                 total_success=1,
                 total_failures=1,
+                failed_attempts=1,
                 last_authentication_at=now,
             ),
             created_at=now,
@@ -89,3 +90,4 @@ class TestAuthRoutes:
         assert result.info.total == 2
         assert result.info.total_success == 1
         assert result.info.total_failures == 1
+        assert result.info.failed_attempts == 1

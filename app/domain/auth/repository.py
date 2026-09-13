@@ -106,7 +106,7 @@ class AuthRepository:
         await self.session.commit()
 
     async def persist_authentication(
-        self, user_id: UUID, is_valid: bool
+        self, user_id: UUID, is_valid: bool, threshold: int = 3
     ) -> AuthInfoSchema | None:
         authentication = await self.session.scalar(
             select(Authentication).where(Authentication.user_id == user_id)
@@ -115,8 +115,11 @@ class AuthRepository:
             authentication = await self.initialize_authentication(user_id=user_id)
 
         authentication.total = authentication.total + 1
-        authentication.total_failures = (
-            0 if is_valid else authentication.total_failures + 1
+        authentication.total_failures = authentication.total_failures + (
+            0 if is_valid else 1
+        )
+        authentication.failed_attempts = (
+            0 if is_valid else authentication.failed_attempts + 1
         )
         authentication.total_success = authentication.total_success + (
             1 if is_valid else 0
@@ -129,7 +132,7 @@ class AuthRepository:
         await self.session.commit()
         await self.session.refresh(authentication)
 
-        if authentication.total_failures >= 3:
+        if authentication.failed_attempts >= threshold:
             await self.update_status(user_id=user_id, status=StatusEnum.LOCKED)
             return None
 
@@ -137,5 +140,6 @@ class AuthRepository:
             total=authentication.total,
             total_success=authentication.total_success,
             total_failures=authentication.total_failures,
+            failed_attempts=authentication.failed_attempts,
             last_authentication_at=authentication.last_authentication_at,
         )
